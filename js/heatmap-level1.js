@@ -7,10 +7,10 @@ function drawLevel1() {
     // Set default mode to "max temperature"
     let useMaxTemp = true;
 
-    // Dimensions
-    const margin = { top: 20, right: 100, bottom: 50, left: 60 },
-    width  = 900 - margin.left - margin.right,
-    height = 500 - margin.top - margin.bottom;
+    // Set margins and dimensions for the SVG container
+    const margin = { top: 30, right: 120, bottom: 60, left: 80 },
+          width = 1200 - margin.left - margin.right,
+          height = 800 - margin.top - margin.bottom;
 
     // Create SVG container
     const svg = d3.select("#chart")
@@ -135,11 +135,11 @@ function drawLevel1() {
             });
 
         // Create and append x-axis
-        const xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));
+        const xAxis = d3.axisTop(xScale).tickFormat(d3.format("d"));
         svg.append("g")
-            .attr("class", "x axis")
-            .attr("transform", `translate(0, ${height})`)
-            .call(xAxis);
+            .call(xAxis)
+            .selectAll("text")
+            .style("font-size", "14px");
 
         // Create and append y-axis
         const yAxis = d3.axisLeft(yScale).tickFormat(d => {
@@ -149,6 +149,7 @@ function drawLevel1() {
         });
         svg.append("g")
             .attr("class", "y axis")
+            .style("font-size", "14px")
             .call(yAxis);
 
         // 5) Legend

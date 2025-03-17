@@ -99,9 +99,8 @@ function drawLevel2() {
         const cellHeight = yScale.bandwidth();
 
         // Add x-axis (years)
-        const xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));
+        const xAxis = d3.axisTop(xScale).tickFormat(d3.format("d"));
         svg.append("g")
-            .attr("transform", `translate(0, ${adjustedHeight})`)
             .call(xAxis)
             .selectAll("text")
             .style("font-size", "14px");
@@ -221,7 +220,7 @@ function drawLevel2() {
         const legendWidth = 20;
 
         const legend = svg.append("g")
-            .attr("transform", `translate(${width + 20}, 10)`);
+            .attr("transform", `translate(${adjustedWidth + 20}, 10)`);
 
         // Create a legend scale (vertical bars for each threshold)
         legend.selectAll("rect")
@@ -250,7 +249,7 @@ function drawLevel2() {
 
         // Line Chart Legend
         const lineLegend = svg.append("g")
-            .attr("transform", `translate(${width + 20}, ${legendHeight + 40})`);
+            .attr("transform", `translate(${adjustedWidth + 20}, ${legendHeight + 40})`);
 
         lineLegend.append("line")
             .attr("x1", 0).attr("y1", 0)
@@ -275,10 +274,19 @@ function drawLevel2() {
             .text("Min Temp");
 
         // Toggle Button for Max/Min Temperature
-        document.getElementById("toggleTemp").addEventListener("click", () => {
+        d3.select("#toggleTemp").on("click", () => {
             useMaxCellColor = !useMaxCellColor;
-            document.getElementById("toggleTemp").innerText = useMaxCellColor ? "Show Min Temp Colors" : "Show Max Temp Colors";
-            updateCellColors();
+            d3.select("#toggleTemp").text(useMaxCellColor 
+            ? "Show Min Temp Colors" 
+            : "Show Max Temp Colors");
+
+            // Transition the cell colors
+            cell.selectAll("rect")
+            .transition()
+            .duration(600)
+            .attr("fill", d => colorScale(
+                useMaxCellColor ? d.maxTemp : d.minTemp
+            ));
         });
     });
 }
