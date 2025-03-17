@@ -32,31 +32,39 @@ d.max_temperature = +d.max_temperature;
 d.min_temperature = +d.min_temperature;
 });
 
+// Get the most recent year in the dataset
+const maxYear = d3.max(rawData, d => d.year);
+    
+// Filter to show only the last 10 years
+const filteredData = rawData.filter(d => d.year > maxYear - 10);
+
+
 // **Step 1: Group Data by Year and Month**
 const grouped = d3.rollups(
-rawData,
-v => ({
-daily: v.map(d => ({ day: d.day, maxTemp: d.max_temperature, minTemp: d.min_temperature })),
-avgMax: d3.mean(v, d => d.max_temperature),
-avgMin: d3.mean(v, d => d.min_temperature)
-}),
-d => d.year,
-d => d.month
+    filteredData,
+    v => ({
+        daily: v.map(d => ({ day: d.day, maxTemp: d.max_temperature, minTemp: d.min_temperature })),
+        maxTemp: d3.max(v, d => d.max_temperature),  // Use max 
+        minTemp: d3.min(v, d => d.min_temperature)   // Use min 
+    }),
+    d => d.year,
+    d => d.month
 );
 
 // Flatten into an array for D3
 const monthlyData = [];
 grouped.forEach(([year, monthsArr]) => {
-monthsArr.forEach(([month, val]) => {
-monthlyData.push({
-  year: year,
-  month: month,
-  daily: val.daily,  // Daily temperature variations
-  avgMax: val.avgMax,
-  avgMin: val.avgMin
+    monthsArr.forEach(([month, val]) => {
+        monthlyData.push({
+            year: year,
+            month: month,
+            daily: val.daily,
+            maxTemp: val.maxTemp,  
+            minTemp: val.minTemp   
+        });
+    });
 });
-});
-});
+
 
 // **Step 2: Define Scales**
 const years = Array.from(new Set(monthlyData.map(d => d.year))).sort();
@@ -73,11 +81,30 @@ const yScale = d3.scaleBand()
 .padding(0.05);
 
 // Compute temperature range for color scale
-const allAvgs = monthlyData.flatMap(d => [d.avgMax, d.avgMin]);
-const tempExtent = d3.extent(allAvgs);
+const allTemps = monthlyData.flatMap(d => [d.maxTemp, d.minTemp]);
+const tempExtent = d3.extent(allTemps);
 
-const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
-.domain(tempExtent);
+// color range from blue to red
+const colorRange = [
+    "#4575b4", // Dark blue (Coldest)
+    "#74add1", // Medium blue
+    "#abd9e9", // Light blue
+    "#e0f3f8", // Very light blue
+    "#ffffbf", // Light yellow
+    "#fee090", // Yellow
+    "#fdae61", // Light orange
+    "#f46d43", // Orange
+    "#d73027", // Red
+    "#a50026"  // Dark red (Hottest)
+  ];
+  
+  //  temperature thresholds 
+  const tempThresholds = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45];
+
+// Discrete color scale mapping temperatures to bins
+const colorScale = d3.scaleThreshold()
+  .domain(tempThresholds)
+  .range(colorRange);
 
 // **Step 3: Create Cells**
 const cell = svg.selectAll(".month-cell")
@@ -91,54 +118,75 @@ const cellHeight = yScale.bandwidth();
 
 // Draw background rectangle (color by average max temperature)
 cell.append("rect")
-.attr("width", cellWidth)
-.attr("height", cellHeight)
-.attr("fill", d => colorScale(d.avgMax))
-.on("mouseover", (event, d) => {
-tooltip.style("opacity", 1)
-  .html(`
-    <strong>${d.year}-${String(d.month).padStart(2,"0")}</strong><br>
-    Avg Max: ${d.avgMax.toFixed(1)} °C<br>
-    Avg Min: ${d.avgMin.toFixed(1)} °C
-  `)
-  .style("left", (event.pageX + 10) + "px")
-  .style("top", (event.pageY - 28) + "px");
-})
-.on("mouseout", () => tooltip.style("opacity", 0));
+    .attr("width", cellWidth)
+    .attr("height", cellHeight)
+    .attr("fill", d => colorScale(d.maxTemp))  // Use maxTemp instead of avgMax
+    .attr("stroke", "white")
+    .attr("stroke-width", 1)
+    .on("mouseover", (event, d) => {
+        tooltip.style("opacity", 1)
+            .html(`
+                <strong>${d.year}-${String(d.month).padStart(2,"0")}</strong><br>
+                Max: ${d.maxTemp.toFixed(1)} °C<br>
+                Min: ${d.minTemp.toFixed(1)} °C
+            `)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px");
+    })
+    .on("mouseout", () => tooltip.style("opacity", 0));
 
 // **Step 4: Draw Mini Line Charts**
+// After calculating monthlyData, determine the global min and max temperatures
+// This will be used for all mini charts
+const globalMinTemp = d3.min(monthlyData.flatMap(d => 
+    d.daily.map(dd => dd.minTemp)
+));
+
+const globalMaxTemp = d3.max(monthlyData.flatMap(d => 
+    d.daily.map(dd => dd.maxTemp)
+));
+
 cell.each(function(d) {
-const g = d3.select(this);
+    const g = d3.select(this);
 
-const dailyData = d.daily;
-const daysInMonth = d3.max(dailyData, dd => dd.day);
+    const dailyData = d.daily;
+    const daysInMonth = d3.max(dailyData, dd => dd.day);
 
-// Scales for mini line charts
-const xMini = d3.scaleLinear()
-.domain([1, daysInMonth])
-.range([4, cellWidth - 4]);
+    const xMini = d3.scaleLinear().domain([1, daysInMonth]).range([4, cellWidth - 4]);
+    
+    // Use the global min and max temperature for ALL mini charts
+    const yMini = d3.scaleLinear()
+      .domain([globalMinTemp, globalMaxTemp])
+      .range([cellHeight - 4, 4]);
 
-const tempMin = d3.min(dailyData, dd => dd.minTemp);
-const tempMax = d3.max(dailyData, dd => dd.maxTemp);
+    // Line generator for max temperature
+    const maxLineGen = d3.line()
+      .x(dd => xMini(dd.day))
+      .y(dd => yMini(dd.maxTemp))
+      .curve(d3.curveMonotoneX);
 
-const yMini = d3.scaleLinear()
-.domain([tempMin, tempMax])
-.range([cellHeight - 4, 4]);
+    //  Line generator for min temperature
+    const minLineGen = d3.line()
+      .x(dd => xMini(dd.day))
+      .y(dd => yMini(dd.minTemp))
+      .curve(d3.curveMonotoneX);
 
-// Line generator
-const lineGen = d3.line()
-.x(dd => xMini(dd.day))
-.y(dd => yMini(dd.maxTemp))
-.curve(d3.curveMonotoneX);
+    // Plot max temperature line (e.g., red)
+    g.append("path")
+      .attr("d", maxLineGen(dailyData))
+      .attr("stroke", "#4daf4a")
+      .attr("fill", "none")
+      .attr("stroke-width", 1.5);
 
-g.append("path")
-.attr("class", "mini-line")
-.attr("d", lineGen(dailyData))
-.attr("stroke", "#2c7fb8")
-.attr("fill", "none")
-.attr("stroke-width", 1.5);
-});
-
+    // Plot min temperature line (e.g., blue)
+    g.append("path")
+      .attr("d", minLineGen(dailyData))
+      .attr("stroke", "#a6cee3")
+      .attr("fill", "none")
+      .attr("stroke-width", 1.5);
+  });
+xScale.padding(0.02);  // Reduce padding to make cells larger
+yScale.padding(0.02);
 // **Step 5: Add Axes**
 const xAxis = d3.axisBottom(xScale).tickFormat(d3.format("d"));
 const yAxis = d3.axisLeft(yScale).tickFormat(d => {
@@ -153,41 +201,64 @@ svg.append("g")
 svg.append("g")
 .call(yAxis);
 
-// **Step 6: Add Legend**
-const legendHeight = 150;
-const legendWidth  = 20;
+// Heatmap Legend (Stepwise Colors)
+const legendHeight = 180;
+const legendWidth = 20;
+
 const legend = svg.append("g")
-.attr("transform", `translate(${width + 10}, 0)`);
+  .attr("transform", `translate(${width + 20}, 10)`);
 
-const legendScale = d3.scaleLinear()
-.domain(tempExtent)
-.range([legendHeight, 0]);
+// Create a legend scale (vertical bars for each threshold)
+legend.selectAll("rect")
+  .data(tempThresholds)
+  .enter().append("rect")
+    .attr("y", (d, i) => i * (legendHeight / tempThresholds.length))
+    .attr("width", legendWidth)
+    .attr("height", legendHeight / tempThresholds.length)
+    .attr("fill", (d, i) => colorRange[i]);
 
-const legendAxis = d3.axisRight(legendScale).ticks(5);
+// Add labels for the thresholds
+legend.selectAll("text")
+  .data(tempThresholds)
+  .enter().append("text")
+    .attr("x", legendWidth + 5)
+    .attr("y", (d, i) => (i * (legendHeight / tempThresholds.length)) + 10)
+    .attr("font-size", "12px")
+    .text(d => `${d}°C`);
 
-const gradient = legend.append("defs")
-.append("linearGradient")
-.attr("id", "tempGradient")
-.attr("x1", "0%").attr("y1", "100%")
-.attr("x2", "0%").attr("y2", "0%");
+// Legend Title
+legend.append("text")
+  .attr("x", 0)
+  .attr("y", -10)
+  .attr("font-size", "12px")
+  .text("Temperature (°C)");
 
-gradient.selectAll("stop")
-.data([
-{offset: "0%", color: d3.interpolateYlOrRd(0)},
-{offset: "100%", color: d3.interpolateYlOrRd(1)}
-])
-.enter().append("stop")
-.attr("offset", d => d.offset)
-.attr("stop-color", d => d.color);
+//  Line Chart Legend
+const lineLegend = svg.append("g")
+    .attr("transform", `translate(${width + 20}, ${legendHeight + 40})`);
 
-legend.append("rect")
-.attr("width", legendWidth)
-.attr("height", legendHeight)
-.style("fill", "url(#tempGradient)");
+lineLegend.append("line")
+    .attr("x1", 0).attr("y1", 0)
+    .attr("x2", 20).attr("y2", 0)
+    .attr("stroke", "#39A96B")
+    .attr("stroke-width", 2);
 
-legend.append("g")
-.attr("transform", `translate(${legendWidth},0)`)
-.call(legendAxis);
+lineLegend.append("text")
+    .attr("x", 30).attr("y", 5)
+    .attr("font-size", "12px")
+    .text("Max Temp");
+
+lineLegend.append("line")
+    .attr("x1", 0).attr("y1", 20)
+    .attr("x2", 20).attr("y2", 20)
+    .attr("stroke", "#AAAAAA")
+    .attr("stroke-width", 2);
+
+lineLegend.append("text")
+    .attr("x", 30).attr("y", 25)
+    .attr("font-size", "12px")
+    .text("Min Temp");
+
 });
 }
 
