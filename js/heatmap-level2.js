@@ -3,16 +3,17 @@ function drawLevel2() {
 // Clear the existing visualization
 d3.select("#chart").select("svg").remove();
     // Set dimensions and margins for the SVG container.
-const margin = { top: 20, right: 100, bottom: 50, left: 60 },
-width  = 1000 - margin.left - margin.right,
-height = 600 - margin.top - margin.bottom;
+// Increase the dimensions of the SVG container
+const margin = { top: 30, right: 120, bottom: 60, left: 80 },
+    width = 1200 - margin.left - margin.right,     // Increased from 1000
+    height = 800 - margin.top - margin.bottom;     // Increased from 600
 
 const svg = d3.select("#chart")
-.append("svg")
-.attr("width",  width  + margin.left + margin.right)
-.attr("height", height + margin.top  + margin.bottom)
-.append("g")
-.attr("transform", `translate(${margin.left},${margin.top})`);
+    .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+    .attr("transform", `translate(${margin.left},${margin.top})`);
 
 const tooltip = d3.select("#tooltip");
 
@@ -70,15 +71,22 @@ grouped.forEach(([year, monthsArr]) => {
 const years = Array.from(new Set(monthlyData.map(d => d.year))).sort();
 const months = [1,2,3,4,5,6,7,8,9,10,11,12];
 
+const cellSize = Math.min(width / years.length, height / months.length);
+
+// Recalculate width and height to maintain proper spacing
+const adjustedWidth = cellSize * years.length;
+const adjustedHeight = cellSize * months.length;
+
+// Update the scales to use the new dimensions
 const xScale = d3.scaleBand()
-.domain(years)
-.range([0, width])
-.padding(0.05);
+    .domain(years)
+    .range([0, adjustedWidth])
+    .padding(0.02);
 
 const yScale = d3.scaleBand()
-.domain(months)
-.range([0, height])
-.padding(0.05);
+    .domain(months)
+    .range([0, adjustedHeight])
+    .padding(0.02);
 
 // Compute temperature range for color scale
 const allTemps = monthlyData.flatMap(d => [d.maxTemp, d.minTemp]);
@@ -176,14 +184,14 @@ cell.each(function(d) {
       .attr("d", maxLineGen(dailyData))
       .attr("stroke", "#4daf4a")
       .attr("fill", "none")
-      .attr("stroke-width", 1.5);
+      .attr("stroke-width", 2);
 
     // Plot min temperature line (e.g., blue)
     g.append("path")
       .attr("d", minLineGen(dailyData))
       .attr("stroke", "#a6cee3")
       .attr("fill", "none")
-      .attr("stroke-width", 1.5);
+      .attr("stroke-width", 2);
   });
 xScale.padding(0.02);  // Reduce padding to make cells larger
 yScale.padding(0.02);
@@ -195,11 +203,15 @@ return d3.timeFormat("%b")(date);
 });
 
 svg.append("g")
-.attr("transform", `translate(0, ${height})`)
-.call(xAxis);
+    .attr("transform", `translate(0, ${height})`)
+    .call(xAxis)
+    .selectAll("text")
+    .style("font-size", "14px");
 
 svg.append("g")
-.call(yAxis);
+    .call(yAxis)
+    .selectAll("text")
+    .style("font-size", "14px");
 
 // Heatmap Legend (Stepwise Colors)
 const legendHeight = 180;

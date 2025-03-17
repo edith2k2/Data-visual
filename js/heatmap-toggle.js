@@ -68,7 +68,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("switchLevel2").addEventListener("click", () => {
       if (window.drawLevel2) {
         drawLevel2();
-        document.getElementById("toggleTemp").style.display = "none";
+        document.getElementById("toggleTemp").style.display = "inline-block";
       } else {
         console.error("drawLevel2 is not defined. Ensure heatmap-level2.js is loaded.");
       }
